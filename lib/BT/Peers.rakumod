@@ -63,12 +63,14 @@ method work(--> Supply) {
                 # other messaging handling
                 self!process-buffer($buffer, $conn) if $handshaked;
 
-                LAST { 
+                LAST {
+		    try $conn.close; # cleanup sockets
                     $!todo-chan.send(%( index => %!task<index>, length => %!task<length> )) if %!task;
                     done;
                 }
                 QUIT {
 		    default {
+			try $conn.close; # cleanup sockets
 			$!todo-chan.send(%( index => %!task<index>, length => %!task<length> )) if %!task;
 		    }
                 }

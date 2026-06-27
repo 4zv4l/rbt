@@ -50,13 +50,14 @@ method download(Str $filepath, Str $output-path, UInt $pipeline-size = 15 --> Su
 	}
 	
 	whenever $done-chan.Supply -> %chunk {
-	    $pieces-manager.write: %chunk;
-	    $pieces-manager.bitfield.set(%chunk<index>);
-	    $broadcast.emit(%chunk<index>);
-	    emit %( $pieces-manager.progress, %(:$peers));
-	    done if $pieces-manager.is-complete;
+	    if $pieces-manager.check-write(%chunk) {
+		$broadcast.emit(%chunk<index>);
+		emit %($pieces-manager.progress, %(:$peers, :complete($pieces-manager.is-complete)));
+	    } else {
+		$todo-chan.send: %( index => %chunk<index>, length => %chunk<blob>.bytes );
+	    }
 	}
 
-	emit $pieces-manager.progress;
+	emit %($pieces-manager.progress, %(:$peers, :complete($pieces-manager.is-complete)));
     }
 }

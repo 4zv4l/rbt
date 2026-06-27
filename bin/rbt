@@ -37,6 +37,11 @@ react {
         }).join;
     
 	say "%infos<torrent-name>:\e[K\n[$bar] {%infos<bitfield>.elems}/$tot pieces\e[K\n{%infos<peers>.keys.elems} peers\e[K";
+	if %infos<complete> {
+	    say "Done Downloading !!!";
+	    print "\e[?25h";
+	    done
+	}
     }
 
     whenever signal(SIGINT) {

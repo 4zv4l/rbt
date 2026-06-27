@@ -38,7 +38,7 @@ method write(%chunk) {
     my $global-pos = (%chunk<index> * $!piece-length) + %chunk<begin>;
     my $data       = %chunk<blob>;
     my $bytes-left = $data.bytes;
-    my $data-pos   = 0; # Tracker for where we are inside the chunk's Blob
+    my $data-pos   = 0; # where we are inside the chunk's Blob
 
     for @!files -> %file {
         last if $bytes-left <= 0;
@@ -49,6 +49,7 @@ method write(%chunk) {
 
         %file<handle>.seek($file-pos); 
         %file<handle>.write($data.subbuf($data-pos, $write-count));
+	%file<handle>.flush;
 
         %file<downloaded> += $write-count;
         $global-pos       += $write-count;
@@ -99,6 +100,17 @@ method progress(--> Hash()) {
     :$!bitfield,
     :total-pieces(@!pieces.elems),
     :@!files;
+}
+
+# check if the checksum is right
+# then write to file and update bitfield
+method check-write(%piece --> Bool) {
+    if @!pieces[%piece<index>] eqv sha1(%piece<blob>) {
+	self.write(%piece);
+	self.bitfield.set(%piece<index>);
+	return True
+    }
+    False
 }
 
 method is-complete(--> Bool) {

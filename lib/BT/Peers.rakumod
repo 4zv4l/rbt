@@ -16,8 +16,8 @@ has                   %!task;
 
 enum MessageID <Choke Unchoke Interested NotInterested Have Bitfield Request Piece Cancel>;
 
-method work(--> Promise) {
-    start react {
+method work(--> Supply) {
+    supply {
         whenever IO::Socket::Async.connect(|$!address.split(':')) -> $conn {
             my $handshake = Blob.new(19)
                           ~ "BitTorrent protocol".encode('ascii')
@@ -67,9 +67,10 @@ method work(--> Promise) {
                     $!todo-chan.send(%( index => %!task<index>, length => %!task<length> )) if %!task;
                     done;
                 }
-                QUIT { 
-                    $!todo-chan.send(%( index => %!task<index>, length => %!task<length> )) if %!task;
-                    done;
+                QUIT {
+		    default {
+			$!todo-chan.send(%( index => %!task<index>, length => %!task<length> )) if %!task;
+		    }
                 }
             }
         }

@@ -32,7 +32,7 @@ method download(Str $filepath, Str $output-path, UInt $pipeline-size = 15 --> Su
 	whenever $tracker.fetch-peers -> @peers {
 	    my $new-peers = @peers.Set (-) $peers;
 	    for $new-peers.keys -> $address {
-		BT::Peers.new(
+		whenever BT::Peers.new(
 		    :$address,
 		    :info-hash($torrent.info-hash),
 		    :peer-id($torrent.peer-id),
@@ -41,7 +41,10 @@ method download(Str $filepath, Str $output-path, UInt $pipeline-size = 15 --> Su
 		    :$done-chan,
 		    :broadcast-feed($broadcast.Supply),
 		    :max-pipeline($pipeline-size)
-		).work.then: { $peers.unset($address) };
+		).work {
+		    LAST { $peers.unset($address) }
+		    QUIT { default { $peers.unset($address) } }
+		}
 		$peers.set($address);
 	    }
 	}

@@ -86,36 +86,33 @@ method !request-work(IO::Socket::Async $conn) {
 
     if !%!task {
         my $attempts = 0;
-        while True {
-            if $!todo-chan.poll -> %w {
-                if %w<index> ∈ $!peer-pieces {
-                    %!task = index      => %w<index>,
-                             length     => %w<length>,
-                             buf        => Buf.new(0 xx %w<length>),
-                             req-offset => 0,
-                             downloaded => 0,
-                             pipeline   => 0;
-                    last;
-                } else {
-                    $!todo-chan.send(%w);
-                    $attempts++;
-                }
-            } else {
+        while my $w = $!todo-chan.poll {
+            if $w<index> ∈ $!peer-pieces {
+                %!task = index      => $w<index>,
+                         length     => $w<length>,
+                         buf        => Buf.new(0 xx $w<length>),
+                         req-offset => 0,
+                         downloaded => 0,
+                         pipeline   => 0;
                 last;
             }
+            $!todo-chan.send($w);
+            if ++$attempts > 50 {
+		Promise.in(2).then: { self!request-work($conn) }
+		return
+	    }
         }
     }
 
     while %!task && %!task<pipeline> < $!max-pipeline && %!task<req-offset> < %!task<length> {
         my $len = min(16384, %!task<length> - %!task<req-offset>);
         
-        my Buf $req = Buf.new(0 xx 17);
+        my Buf $req .= new(0 xx 17);
         $req.write-uint32(0, 13, BigEndian);
         $req.write-uint8(4, 6);
         $req.write-uint32(5, %!task<index>, BigEndian);
         $req.write-uint32(9, %!task<req-offset>, BigEndian);
         $req.write-uint32(13, $len, BigEndian);
-        
         $conn.write($req);
         
         %!task<req-offset> += $len;

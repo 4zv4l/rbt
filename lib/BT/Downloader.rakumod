@@ -30,6 +30,8 @@ method download(Str $filepath, Str $output-path, UInt $pipeline-size = 15 --> Su
     
     supply {	
 	whenever $tracker.fetch-peers -> @peers {
+	    note "[+] $?FILE: whenever fetch-peers: start";
+	    LEAVE note "[+] $?FILE: whenever fetch-peers: end";
 	    my $new-peers = @peers.Set (-) $peers;
 	    for $new-peers.keys -> $address {
 		whenever BT::Peers.new(
@@ -50,10 +52,13 @@ method download(Str $filepath, Str $output-path, UInt $pipeline-size = 15 --> Su
 	}
 	
 	whenever $done-chan.Supply -> %chunk {
+	    note "[+] $?FILE: whenever done-chan: start";
+	    LEAVE note "[+] $?FILE: whenever done-chan: end";
 	    if $pieces-manager.check-write(%chunk) {
 		$broadcast.emit(%chunk<index>);
 		emit %($pieces-manager.progress, %(:$peers, :complete($pieces-manager.is-complete)));
 	    } else {
+		note "[*] $?FILE: whenever done-chan: bad checksum";
 		$todo-chan.send: %( index => %chunk<index>, length => %chunk<blob>.bytes );
 	    }
 	}

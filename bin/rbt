@@ -11,37 +11,39 @@ unit sub MAIN(
 
 react {
     whenever BT::Downloader.download($file, $output-path, $pipeline) -> %infos {
-	state $first-print = True;
-	print "\e[3A\r" unless $first-print;
-	$first-print = False;
+	note "[+] $?FILE: download start";
+	LEAVE note "[-] $?FILE: download end";
+	# state $first-print = True;
+	# print "\e[3A\r" unless $first-print;
+	# $first-print = False;
 	
-	my $term-cols = %*ENV<COLUMNS> // try { qx/tput cols/.chomp.Int } // 80;
-	my $width     = max(10, $term-cols - 30); 
-	my $tot       = %infos<total-pieces>;
+	# my $term-cols = %*ENV<COLUMNS> // try { qx/tput cols/.chomp.Int } // 80;
+	# my $width     = max(10, $term-cols - 30); 
+	# my $tot       = %infos<total-pieces>;
 	
-	my $bar       = (0 ..^ $width).map(-> $i {
-            my $start     = Int($i * $tot / $width);
-            my $end       = Int(($i + 1) * $tot / $width);
-            my $slot-size = $end - $start;
+	# my $bar       = (0 ..^ $width).map(-> $i {
+        #     my $start     = Int($i * $tot / $width);
+        #     my $end       = Int(($i + 1) * $tot / $width);
+        #     my $slot-size = $end - $start;
             
-            my $done = ($start ..^ $end).grep({ $_ ∈ %infos<bitfield> }).elems;
-            my $ratio = $slot-size ?? $done / $slot-size !! 0;
+        #     my $done = ($start ..^ $end).grep({ $_ ∈ %infos<bitfield> }).elems;
+        #     my $ratio = $slot-size ?? $done / $slot-size !! 0;
           
-            given $ratio {
-                when * == 1.0 { '█' }
-                when * > 0.70 { '▓' }
-                when * > 0.40 { '▒' }
-                when * > 0.05 { '░' }
-                default       { ' ' }
-            }
-        }).join;
+        #     given $ratio {
+        #         when * == 1.0 { '█' }
+        #         when * > 0.70 { '▓' }
+        #         when * > 0.40 { '▒' }
+        #         when * > 0.05 { '░' }
+        #         default       { ' ' }
+        #     }
+        # }).join;
     
-	say "%infos<torrent-name>:\e[K\n[$bar] {%infos<bitfield>.elems}/$tot pieces\e[K\n{%infos<peers>.keys.elems} peers\e[K";
-	if %infos<complete> {
-	    say "Done Downloading !!!";
-	    print "\e[?25h";
-	    done
-	}
+	# say "%infos<torrent-name>:\e[K\n[$bar] {%infos<bitfield>.elems}/$tot pieces\e[K\n{%infos<peers>.keys.elems} peers\e[K";
+	# if %infos<complete> {
+	#     say "Done Downloading !!!";
+	#     print "\e[?25h";
+	#     done
+	# }
     }
 
     whenever signal(SIGINT) {

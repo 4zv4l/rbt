@@ -19,6 +19,9 @@ enum MessageID <Choke Unchoke Interested NotInterested Have Bitfield Request Pie
 method work(--> Supply) {
     supply {
         whenever IO::Socket::Async.connect(|$!address.split(':')) -> $conn {
+	    note "[+] $?FILE: whenever connect: start $!address";
+	    LEAVE note "[+] $?FILE: whenever connect: end $!address";
+
             my $handshake = Blob.new(19)
                           ~ "BitTorrent protocol".encode('ascii')
                           ~ Blob.new(0 xx 8)
@@ -31,6 +34,9 @@ method work(--> Supply) {
 
             # update peer we got a new chunk
             whenever $!broadcast-feed -> $index {
+		note "[+] $?FILE: whenever broadcast: start $!address";
+		LEAVE note "[+] $?FILE: whenever broadcast: end $!address";
+
                 if $handshaked {
                     my Buf $have-msg .= new;
                     $have-msg.write-uint32(0, 5, BigEndian); 
@@ -42,6 +48,8 @@ method work(--> Supply) {
 
             # receive data loop
             whenever $conn.Supply(:bin) -> $chunk {
+		note "[+] $?FILE: whenever conn: start $!address";
+		LEAVE note "[+] $?FILE: whenever conn: end $!address";
                 $buffer.append($chunk);
 
                 # handle handshake + interested
@@ -90,7 +98,7 @@ method !request-work(IO::Socket::Async $conn) {
             if $w<index> ∈ $!peer-pieces {
                 %!task = index      => $w<index>,
                          length     => $w<length>,
-                         buf        => Buf.new(0 xx $w<length>),
+                         buf        => Buf.allocate($w<length>),
                          req-offset => 0,
                          downloaded => 0,
                          pipeline   => 0;
@@ -107,7 +115,7 @@ method !request-work(IO::Socket::Async $conn) {
     while %!task && %!task<pipeline> < $!max-pipeline && %!task<req-offset> < %!task<length> {
         my $len = min(16384, %!task<length> - %!task<req-offset>);
         
-        my Buf $req .= new(0 xx 17);
+        my Buf $req .= allocate(17);
         $req.write-uint32(0, 13, BigEndian);
         $req.write-uint8(4, 6);
         $req.write-uint32(5, %!task<index>, BigEndian);

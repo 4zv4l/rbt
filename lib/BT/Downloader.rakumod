@@ -56,9 +56,11 @@ method download(Str $filepath, Str $output-path, UInt $pipeline-size = 15 --> Su
 	    LEAVE note "[+] $?FILE: whenever done-chan: end";
 	    if $pieces-manager.check-write(%chunk) {
 		$broadcast.emit(%chunk<index>);
+		sleep 5;
 		emit %($pieces-manager.progress, %(:$peers, :complete($pieces-manager.is-complete)));
 	    } else {
 		note "[*] $?FILE: whenever done-chan: bad checksum";
+		sleep 3;
 		$todo-chan.send: %( index => %chunk<index>, length => %chunk<blob>.bytes );
 	    }
 	}

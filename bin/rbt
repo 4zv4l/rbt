@@ -48,6 +48,7 @@ react {
 
     whenever signal(SIGINT) {
 	say "\rCtrl-c: quitting..";
+	VM.own-up;
 	print "\e[?25h"; # unhide cursor
 	exit;
     }

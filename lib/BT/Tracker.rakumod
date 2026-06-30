@@ -22,7 +22,8 @@ method fetch-peers(--> Supply) {
                     if $body-p.status == Kept {
 			note "[*] $?FILE: whenever body OK";
                         my %reply = bdecode($body-p.result);
-                        
+
+			sleep 5;
                         emit %reply<peers>.list.rotor(6).map: -> ($a, $b, $c, $d, $p1, $p2) {
                             "$a.$b.$c.$d:{ ($p1 +< 8) +| $p2 }"
                         };

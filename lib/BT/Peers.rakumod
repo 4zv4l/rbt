@@ -11,6 +11,7 @@ has BT::PiecesManager $.pieces-manager;
 has Channel           $.todo-chan;
 has Channel           $.done-chan;
 has Supply            $.broadcast-feed;
+has Supplier          $!work-bus .= new;
 has Int               $.max-pipeline = 15;
 has                   %!task;
 
@@ -37,6 +38,49 @@ method work(--> Supply) {
                     $have-msg.write-uint8(4, 4); 
                     $have-msg.write-uint32(5, $index, BigEndian);
                     $conn.write($have-msg);
+                }
+            }
+
+	    whenever $!work-bus.Supply {
+                next if $!choked;
+
+                if !%!task {
+                    my @requeue;
+                    my $found = False;
+                    
+                    while my $w = $!todo-chan.poll {
+                        if $w<index> ∈ $!peer-pieces {
+                            %!task = index      => $w<index>,
+                                     length     => $w<length>,
+                                     buf        => Buf.allocate($w<length>),
+                                     req-offset => 0, downloaded => 0, pipeline => 0;
+                            $found = True;
+                            last;
+                        }
+                        @requeue.push($w);
+                        last if @requeue.elems > 50;
+                    }
+                    
+                    $!todo-chan.send($_) for @requeue;
+
+                    if !$found {
+                        whenever Promise.in(2) { $!work-bus.emit(True) }
+			next
+                    }
+                }
+
+                while %!task && %!task<pipeline> < $!max-pipeline && %!task<req-offset> < %!task<length> {
+                    my $len = min(16384, %!task<length> - %!task<req-offset>);
+                    my Buf $req .= new(0 xx 17);
+                    $req.write-uint32(0, 13, BigEndian);
+                    $req.write-uint8(4, 6);
+                    $req.write-uint32(5, %!task<index>, BigEndian);
+                    $req.write-uint32(9, %!task<req-offset>, BigEndian);
+                    $req.write-uint32(13, $len, BigEndian);
+                    $conn.write($req);
+                    
+                    %!task<req-offset> += $len;
+                    %!task<pipeline>++;
                 }
             }
 
@@ -72,51 +116,11 @@ method work(--> Supply) {
 		    default {
 			try $conn.close; # cleanup sockets
 			$!todo-chan.send(%( index => %!task<index>, length => %!task<length> )) if %!task;
+			done;
 		    }
                 }
             }
         }
-    }
-}
-
-# request task from Downloader channel
-# send multiple request to download 1 full piece
-method !request-work(IO::Socket::Async $conn) {
-    return if $!choked;
-
-    if !%!task {
-        my $attempts = 0;
-        while my $w = $!todo-chan.poll {
-            if $w<index> ∈ $!peer-pieces {
-                %!task = index      => $w<index>,
-                         length     => $w<length>,
-                         buf        => Buf.new(0 xx $w<length>),
-                         req-offset => 0,
-                         downloaded => 0,
-                         pipeline   => 0;
-                last;
-            }
-            $!todo-chan.send($w);
-            if ++$attempts > 50 {
-		Promise.in(2).then: { self!request-work($conn) }
-		return
-	    }
-        }
-    }
-
-    while %!task && %!task<pipeline> < $!max-pipeline && %!task<req-offset> < %!task<length> {
-        my $len = min(16384, %!task<length> - %!task<req-offset>);
-        
-        my Buf $req .= new(0 xx 17);
-        $req.write-uint32(0, 13, BigEndian);
-        $req.write-uint8(4, 6);
-        $req.write-uint32(5, %!task<index>, BigEndian);
-        $req.write-uint32(9, %!task<req-offset>, BigEndian);
-        $req.write-uint32(13, $len, BigEndian);
-        $conn.write($req);
-        
-        %!task<req-offset> += $len;
-        %!task<pipeline>++;
     }
 }
 
@@ -132,9 +136,9 @@ method !process-buffer(Buf $buffer is rw, IO::Socket::Async $conn) {
 
         given MessageID($id) {
             when Choke    { $!choked = True; $!todo-chan.send(%( index => %!task<index>, length => %!task<length> )); %!task = () }
-            when Unchoke  { $!choked = False; self!request-work($conn) }
-            when Have     { self!handle-have($payload); self!request-work($conn) }
-            when Bitfield { self!handle-bitfield($payload); self!request-work($conn) }
+            when Unchoke  { $!choked = False; $!work-bus.emit(True); }
+            when Have     { self!handle-have($payload); $!work-bus.emit(True); }
+            when Bitfield { self!handle-bitfield($payload); $!work-bus.emit(True); }
             when Piece    { self!handle-piece($payload, $conn) }
             when Request  { self!handle-request($payload, $conn) }
         }
@@ -177,7 +181,7 @@ method !handle-piece(Blob $payload, IO::Socket::Async $conn) {
         %!task = ();
     }
     
-    self!request-work($conn);
+    $!work-bus.emit(True);
 }
 
 # peer asks us for a piece
